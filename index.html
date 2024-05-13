@@ -66,8 +66,8 @@
             return;
         }
 
-        const roundLon = Math.round(lon);
-        const roundLat = Math.round(lat);
+        const roundLon = Math.floor(lon);
+        const roundLat = Math.floor(lat);
         const url = `grid/${roundLon}/${roundLat}.geojson`;
 
         if (!cache.hasOwnProperty(url)) {
@@ -101,6 +101,7 @@
             county.openPopup([lat, lon]);
             openPopupLayer = county;
         } else {
+            console.log("GPS point not in downloaded layer.")
             map.fitBounds(featureSet.getBounds());
         }
 
