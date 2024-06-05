@@ -59,6 +59,14 @@
         }
     };
 
+    const featureStyle = function (feature) {
+	const pctDem = feature.properties.DEM / (feature.properties.DEM + feature.properties.REP);
+	const red = 220 - 181 * pctDem;
+	const green = 32 + 75 * pctDem;
+	const blue = 19 + 228 * pctDem;
+	return {fillColor: `RGB(${red}, ${green}, ${blue})`};
+    }
+
     const loadGeoJson = async function (loc) {
         const lon = loc.coords.longitude;
         const lat = loc.coords.latitude;
@@ -81,7 +89,10 @@
 
             if (response.ok) {
                 const j = await response.json();
-                cache[url] = L.geoJSON(j, {"onEachFeature": onEachFeature}).addTo(map);
+                cache[url] = L.geoJSON(j, {
+		    "onEachFeature": onEachFeature,
+		    "style": featureStyle,
+		}).addTo(map);
             } else {
                 cache[url] = null;
             }

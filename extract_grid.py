@@ -33,8 +33,8 @@ with open("data/2020_US_County_Level_Presidential_Results.csv") as f:
         dem = line[dem_i]
         vote_data[fips] = {
             "LOCATION": f"{county}, {state}",
-            "REP": rep,
-            "DEM": dem,
+            "REP": float(rep),
+            "DEM": float(dem),
         }
 
 # Connecticut Planning Regions
