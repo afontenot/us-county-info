@@ -41,6 +41,7 @@
 <body>
 <div id="map" style="width: 100%; height: 100%;"></div>
 <script>
+    const urls = {};
     const cache = {};
     const red = "#dc2013";
     const blue = "#276bf7";
@@ -68,8 +69,8 @@
     }
 
     const loadGeoJson = async function (loc) {
-        const lon = loc.coords.longitude;
-        const lat = loc.coords.latitude;
+        const lon = loc.lng ?? loc.coords.longitude;
+        const lat = loc.lat ?? loc.coords.latitude;
         if (lon === lastLon && lat === lastLat) {
             return;
         }
@@ -78,7 +79,7 @@
         const roundLat = Math.floor(lat);
         const url = `grid/${roundLon}/${roundLat}.geojson`;
 
-        if (!cache.hasOwnProperty(url)) {
+        if (!urls.hasOwnProperty(url)) {
             let response;
             try {
                 response = await fetch(url);
@@ -88,36 +89,46 @@
             }
 
             if (response.ok) {
+                urls[url] = [];
                 const j = await response.json();
-                cache[url] = L.geoJSON(j, {
-		    "onEachFeature": onEachFeature,
-		    "style": featureStyle,
-		}).addTo(map);
+                for (const feature of j.features) {
+                    urls[url].push(feature.properties.GEOID);
+                    if (cache.hasOwnProperty(feature.properties.GEOID)) {
+                        continue;
+                    }
+                    cache[feature.properties.GEOID] = L.geoJSON(feature, {
+                        "onEachFeature": onEachFeature,
+                        "style": featureStyle
+                    });
+                }
             } else {
-                cache[url] = null;
-            }
-        }
-
-        const featureSet = cache[url];
-        const matchedLayers = leafletPip.pointInLayer([lon, lat], featureSet, true);
-        if (matchedLayers.length > 0) {
-            const county = matchedLayers[0];
-            if (openPopupLayer === county) {
                 return;
             }
-            if (openPopupLayer) {
-                openPopupLayer.closePopup();
-            }
-            map.fitBounds(county.getBounds());
-            county.openPopup([lat, lon]);
-            openPopupLayer = county;
-        } else {
-            console.log("GPS point not in downloaded layer.")
-            map.fitBounds(featureSet.getBounds());
         }
 
         lastLon = lon;
         lastLat = lat;
+
+        for (const geoid of urls[url]) {
+            const layer = cache[geoid];
+            const matchedFeatures = leafletPip.pointInLayer([lon, lat], layer, true);
+            if (matchedFeatures.length === 1) {
+                layer.addTo(map);
+                if (loc.coords) {
+                    map.fitBounds(layer.getBounds());
+                }
+                const activeFeature = matchedFeatures[0];
+                if (openPopupLayer === activeFeature) {
+                    return;
+                }
+                if (openPopupLayer) {
+                    openPopupLayer.closePopup();
+                }
+                activeFeature.openPopup([lat, lon]);
+                openPopupLayer = activeFeature;
+                break;
+            }
+        }
     };
 
     const geoErr = function(err) {
@@ -131,6 +142,12 @@
         maxZoom: 19,
         minZoom: 2
     }).addTo(map);
+
+    map.on("click", function(event) {
+        if (event.originalEvent.detail === 1) {
+            loadGeoJson(event.latlng);
+        }
+    });
 
     navigator.geolocation.watchPosition(
         loadGeoJson,
