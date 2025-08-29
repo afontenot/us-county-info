@@ -47,6 +47,7 @@
     const blue = "#276bf7";
     let lastLoc, openPopupLayer;
     let tracking = true;
+    let trackingButtonVisible = false;
     let refitInProgress = false;
 
     const onEachFeature = function (feature, layer) {
@@ -116,7 +117,6 @@
                 if (loc.coords && tracking) {
                     refitInProgress = true;
                     map.fitBounds(layer.getBounds());
-                    refitInProgress = false;
                 }
                 const activeFeature = matchedFeatures[0];
                 if (openPopupLayer === activeFeature) {
@@ -142,19 +142,23 @@
         }
         lastLoc = loc;
         if (tracking) {
-            loadGeoJson(loc);
+            await loadGeoJson(loc);
         }
     }
 
     const setTracking = function (trackingOn) {
+        if (refitInProgress) {
+            return;
+        }
         tracking = trackingOn;
         if (lastLoc) {
-            const buttonShown = retrackButton.getContainer();
-            if (!tracking && !buttonShown) {
+            if (!tracking && !trackingButtonVisible) {
+                trackingButtonVisible = true;
                 retrackButton.addTo(map);
-            } else if (tracking && buttonShown) {
+            } else if (tracking && trackingButtonVisible) {
+                loadGeoJson(lastLoc);
+                trackingButtonVisible = false;
                 retrackButton.remove();
-                autoUpdateLocation(lastLoc);
             }
         }
     }
@@ -177,6 +181,7 @@
         },
         onAdd: function(map) {
             const container = L.DomUtil.create("div", "leaflet-bar leaflet-control");
+            container.title = "Track Location";
             const button = L.DomUtil.create("a", "leaflet-control-button", container);
             button.style.backgroundImage = "url('images/reticule.svg')";
             button.style.backgroundSize = "cover";
@@ -184,9 +189,6 @@
             L.DomEvent.on(button, "click", function () {
                 setTracking(true);
             });
-
-            container.title = "Track Location";
-
             return container;
         }
     })
@@ -200,10 +202,12 @@
         }
     });
 
-    map.on("zoom", function(event) {
-        if (!refitInProgress) {
-            setTracking(false);
-        }
+    map.on("movestart", function(event) {
+        setTracking(false);
+    });
+
+    map.on("zoomend", function(event) {
+        refitInProgress = false;
     });
 
     navigator.geolocation.watchPosition(
