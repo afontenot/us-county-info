@@ -47,6 +47,7 @@
     const blue = "#276bf7";
     let lastLoc, openPopupLayer;
     let tracking = true;
+    let refitInProgress = false;
 
     const onEachFeature = function (feature, layer) {
         if (feature.properties && feature.properties.LOCATION) {
@@ -112,8 +113,10 @@
             const matchedFeatures = leafletPip.pointInLayer([lon, lat], layer, true);
             if (matchedFeatures.length === 1) {
                 layer.addTo(map);
-                if (loc.coords) {
+                if (loc.coords && tracking) {
+                    refitInProgress = true;
                     map.fitBounds(layer.getBounds());
+                    refitInProgress = false;
                 }
                 const activeFeature = matchedFeatures[0];
                 if (openPopupLayer === activeFeature) {
@@ -198,8 +201,9 @@
     });
 
     map.on("zoom", function(event) {
-        console.log("zooming");
-        setTracking(false);
+        if (!refitInProgress) {
+            setTracking(false);
+        }
     });
 
     navigator.geolocation.watchPosition(
