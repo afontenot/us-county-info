@@ -64,11 +64,12 @@
     };
 
     const featureStyle = function (feature) {
-	const pctDem = feature.properties.DEM / (feature.properties.DEM + feature.properties.REP);
-	const red = 220 - 181 * pctDem;
-	const green = 32 + 75 * pctDem;
-	const blue = 19 + 228 * pctDem;
-	return {fillColor: `RGB(${red}, ${green}, ${blue})`};
+        const pctDem = feature.properties.DEM / (feature.properties.DEM + feature.properties.REP);
+        const red = 220 - 181 * pctDem;
+        const green = 32 + 75 * pctDem;
+        const blue = 19 + 228 * pctDem;
+        const rgb = `RGB(${red}, ${green}, ${blue})`;
+        return {color: rgb, fillColor: rgb, opacity: 0.5, fillOpacity: 0.4};
     }
 
     const loadGeoJson = async function (loc) {
