@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <base target="_top">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <title>Local 2020 Election Results by County</title>
+
+    <link rel="shortcut icon" type="image/x-icon" href="docs/images/favicon.ico" />
+
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mapbox/leaflet-pip@1.1.0/leaflet-pip.min.js" integrity="sha256-1qMq9W8o+hSDIQEYuLHXhK8JnpzxY/vz7lqluha213g=" crossorigin="anonymous"></script>
+
+    <style>
+        html, body {
+            height: 100%;
+            margin: 0;
+        }
+        .leaflet-container {
+            height: 100%;
+            width: 100%;
+            max-width: 100%;
+            max-height: 100%;
+        }
+        div.header {
+            font-weight: bold;
+            margin-bottom: 6px;
+        }
+        div.flag {
+            height: 15px;
+            box-shadow: 0 0 5px #5555;
+            margin-bottom: 6px;
+        }
+        .fr {
+            float: right;
+        }
+    </style>
+</head>
+<body>
+<div id="map" style="width: 100%; height: 100%;"></div>
+<script>
+    const urls = {};
+    const cache = {};
+    const red = "#dc2013";
+    const blue = "#276bf7";
+    let lastLoc, openPopupLayer;
+    let tracking = true;
+    let trackingButtonVisible = false;
+    let refitInProgress = false;
+
+    const onEachFeature = function (feature, layer) {
+        if (feature.properties && feature.properties.LOCATION) {
+            const county = feature.properties.LOCATION;
+            const dpct = 100 * feature.properties.DEM;
+            const rpct = 100 * feature.properties.REP;
+            const rpct_rem = 100 - rpct;
+            const fstyle = `background-image: linear-gradient(90deg, ${blue}, ${blue} ${dpct}%, #0000 ${dpct}%, #0000 ${rpct_rem}%, ${red} ${rpct_rem}%)`;
+            const dpct_rnd = Math.round(10 * dpct) / 10;
+            const rpct_rnd = Math.round(10 * rpct) / 10;
+            layer.bindPopup(`<div class="header">${county}</div><div class="flag" style="${fstyle}"></div><div>Dem: ${dpct_rnd}%<span class="fr">Rep: ${rpct_rnd}%</span>`);
+        }
+    };
+
+    const featureStyle = function (feature) {
+	const pctDem = feature.properties.DEM / (feature.properties.DEM + feature.properties.REP);
+	const red = 220 - 181 * pctDem;
+	const green = 32 + 75 * pctDem;
+	const blue = 19 + 228 * pctDem;
+	return {fillColor: `RGB(${red}, ${green}, ${blue})`};
+    }
+
+    const loadGeoJson = async function (loc) {
+        const lon = loc.lng ?? loc.coords.longitude;
+        const lat = loc.lat ?? loc.coords.latitude;
+
+        const roundLon = Math.floor(lon);
+        const roundLat = Math.floor(lat);
+        const url = `grid2020/${roundLon}/${roundLat}.geojson`;
+
+        if (!urls.hasOwnProperty(url)) {
+            let response;
+            try {
+                response = await fetch(url);
+            } catch (e) {
+                console.log("Could not fetch", url, "-", e);
+                return;
+            }
+
+            if (response.ok) {
+                urls[url] = [];
+                const j = await response.json();
+                for (const feature of j.features) {
+                    urls[url].push(feature.properties.GEOID);
+                    if (cache.hasOwnProperty(feature.properties.GEOID)) {
+                        continue;
+                    }
+                    cache[feature.properties.GEOID] = L.geoJSON(feature, {
+                        "onEachFeature": onEachFeature,
+                        "style": featureStyle
+                    });
+                }
+            } else {
+                return;
+            }
+        }
+
+        lastLon = lon;
+        lastLat = lat;
+
+        for (const geoid of urls[url]) {
+            const layer = cache[geoid];
+            const matchedFeatures = leafletPip.pointInLayer([lon, lat], layer, true);
+            if (matchedFeatures.length === 1) {
+                layer.addTo(map);
+                if (loc.coords && tracking) {
+                    refitInProgress = true;
+                    map.fitBounds(layer.getBounds());
+                }
+                const activeFeature = matchedFeatures[0];
+                if (openPopupLayer === activeFeature) {
+                    return;
+                }
+                if (openPopupLayer) {
+                    openPopupLayer.closePopup();
+                }
+                activeFeature.openPopup([lat, lon]);
+                openPopupLayer = activeFeature;
+                break;
+            }
+        }
+    };
+
+    const autoUpdateLocation = async function (loc) {
+        if (
+            lastLoc &&
+            loc.coords.longitude === lastLoc.coords.longitude &&
+            loc.coords.latitude === lastLoc.coords.latitude
+        ) {
+            return;
+        }
+        lastLoc = loc;
+        if (tracking) {
+            await loadGeoJson(loc);
+        }
+    }
+
+    const setTracking = function (trackingOn) {
+        if (refitInProgress) {
+            return;
+        }
+        tracking = trackingOn;
+        if (lastLoc) {
+            if (!tracking && !trackingButtonVisible) {
+                trackingButtonVisible = true;
+                retrackButton.addTo(map);
+            } else if (tracking && trackingButtonVisible) {
+                loadGeoJson(lastLoc);
+                trackingButtonVisible = false;
+                retrackButton.remove();
+            }
+        }
+    }
+
+    const geoErr = function(err) {
+        console.log(err);
+    };
+
+    const map = L.map("map").setView([0, 0], 2);
+
+    const tiles = L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        attribution: "&copy; <a href=\"http://www.openstreetmap.org/copyright\">OpenStreetMap</a>",
+        maxZoom: 19,
+        minZoom: 2
+    }).addTo(map);
+
+    L.Control.Retrack = L.Control.extend({
+        options: {
+            position: "topleft"
+        },
+        onAdd: function(map) {
+            const container = L.DomUtil.create("div", "leaflet-bar leaflet-control");
+            container.title = "Track Location";
+            const button = L.DomUtil.create("a", "leaflet-control-button", container);
+            button.style.backgroundImage = "url('images/reticule.svg')";
+            button.style.backgroundSize = "cover";
+            L.DomEvent.disableClickPropagation(button);
+            L.DomEvent.on(button, "click", function () {
+                setTracking(true);
+            });
+            return container;
+        }
+    })
+
+    const retrackButton = new L.Control.Retrack();
+
+    map.on("click", function(event) {
+        if (event.originalEvent.detail === 1) {
+            setTracking(false);
+            loadGeoJson(event.latlng);
+        }
+    });
+
+    map.on("movestart", function(event) {
+        setTracking(false);
+    });
+
+    map.on("moveend", function(event) {
+        refitInProgress = false;
+    });
+
+    navigator.geolocation.watchPosition(
+        autoUpdateLocation,
+        geoErr,
+        {maximumAge: 120000}
+    );
+</script>
+</body>
+</html>
+
