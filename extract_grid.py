@@ -1,5 +1,3 @@
-from functools import reduce
-from math import ceil, floor
 from multiprocessing.pool import Pool
 from os import makedirs
 
@@ -7,17 +5,16 @@ import geopandas as gpd
 from shapely import minimum_bounding_circle, minimum_bounding_radius
 from shapely.geometry import Polygon, Point
 
-import alaska
-import connecticut
+import alaska2024
 
 
 print("Reading data...")
-# Source: https://www.census.gov/geographies/mapping-files/time-series/geo/carto-boundary-file.html
-county_data = gpd.read_file("data/cb_2022_us_county_500k.shp")
+# Source: https://www.census.gov/geographies/mapping-files/time-series/geo/cartographic-boundary.html
+county_data = gpd.read_file("data/2024/cb_2024_us_county_500k.shp")
 vote_data = {}
 
-# Source: https://github.com/tonmcg/US_County_Level_Election_Results_08-20
-with open("data/2020_US_County_Level_Presidential_Results.csv") as f:
+# Source: https://github.com/tonmcg/US_County_Level_Election_Results_08-24
+with open("data/2024/2024_US_County_Level_Presidential_Results.csv") as f:
     headers = next(f).split(",")
     fips_i = headers.index("county_fips")
     state_i = headers.index("state_name")
@@ -37,13 +34,8 @@ with open("data/2020_US_County_Level_Presidential_Results.csv") as f:
             "DEM": float(dem),
         }
 
-# Connecticut Planning Regions
-# Source: https://electionhistory.ct.gov/eng/contests/view/15175
-vote_data.update(connecticut.fips_data)
-
 # Alaska Boroughs - Estimated Results, Not Official!
-# Source: https://rrhelections.com/index.php/2021/04/13/alaska-presidential-results-by-county-equivalent-1960-2020/9/
-vote_data.update(alaska.fips_data)
+vote_data.update(alaska2024.fips_data)
 
 print("Precomputing county data...")
 counties = {}
