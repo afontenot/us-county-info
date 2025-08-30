@@ -17,7 +17,7 @@ alaska_county_equivalents = []
 for county in (row[1] for row in county_data.iterrows()):
     if county["STATE_NAME"].lower() == "alaska":
         alaska_county_equivalents.append(county)
-        fips_data[county["GEOID"]] = {"LOCATION": f"{county["NAME"]}, Alaska"}
+        fips_data[county["GEOID"]] = {"LOCATION": f"{county["NAME"]}, Alaska (ED votes)"}
 
 # convert Alaska's precincts from Web Mercator to NAD83
 reproj = pyproj.Transformer.from_proj(3857, 4269, always_xy=True)
